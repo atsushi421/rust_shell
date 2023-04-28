@@ -14,6 +14,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ffi::CString,
     mem::replace,
+    process::exit,
     sync::mpsc::{Receiver, SyncSender},
     thread,
 };
