@@ -1,3 +1,4 @@
+use crate::helper::DynError;
 use crate::msgs::{ShellMsg, WorkerMsg};
 use nix::{
     libc,
@@ -59,6 +60,8 @@ pub struct Worker {
     shell_pgid: Pid,                     // シェルのプロセスグループID
 }
 
+type CmdResult<'a> = Result<Vec<(&'a str, Vec<&'a str>)>, DynError>;
+
 impl Worker {
     pub fn new() -> Self {
         Worker {
@@ -73,9 +76,11 @@ impl Worker {
         }
     }
 
+    // workerスレッドを生成
     pub fn spawn(mut self, worker_rx: Receiver<WorkerMsg>, shell_tx: SyncSender<ShellMsg>) {
         thread::spawn(move || {
             for msg in worker_rx.iter() {
+                // メッセージを受信
                 match msg {
                     WorkerMsg::Cmd(line) => {
                         match parse_cmd(&line) {
@@ -104,4 +109,98 @@ impl Worker {
             }
         });
     }
+
+    fn built_in_cmd(&mut self, cmd: &[(&str, Vec<&str>)], shell_tx: &SyncSender<ShellMsg>) -> bool {
+        if cmd.len() > 1 {
+            return false; // 組み込みコマンドのパイプは非対応
+        }
+
+        match cmd[0].0 {
+            "exit" => self.run_exit(&cmd[0].1, shell_tx),
+            "jobs" => self.run_jobs(shell_tx),
+            "fg" => self.run_fg(&cmd[0].1, shell_tx),
+            "cd" => self.run_cd(&cmd[0].1, shell_tx),
+            _ => false,
+        }
+    }
+
+    /// exitコマンドを実行
+    ///
+    /// 第1引数が指定された場合、それを終了コードとしてシェルを終了。
+    /// 引数がない場合は、最後に終了したプロセスの終了コードとしてシェルを終了。
+    fn run_exit(&mut self, args: &[&str], shell_tx: &SyncSender<ShellMsg>) -> bool {
+        // 実行中のジョブがある場合は終了しない
+        if !self.jobs.is_empty() {
+            eprintln!("ジョブが実行中なので終了できません");
+            self.exit_val = 1; // 失敗
+            shell_tx.send(ShellMsg::Continue(self.exit_val)).unwrap(); // シェルを再開
+            return true;
+        }
+
+        // 終了コードを取得
+        let exit_val = if let Some(s) = args.get(1) {
+            if let Ok(n) = (*s).parse::<i32>() {
+                n
+            } else {
+                // 終了コードか整数ではない
+                eprintln!("{s}は不正な引数です");
+                self.exit_val = 1; // 失敗
+                shell_tx.send(ShellMsg::Continue(self.exit_val)).unwrap(); // シェルを再開
+                return true;
+            }
+        } else {
+            self.exit_val
+        };
+
+        shell_tx.send(ShellMsg::Quit(exit_val)).unwrap(); // シェルを終了
+        true
+    }
+
+    /// 現在シェルが管理して実行しているジョブ一覧を表示
+    /// worker::jobsを表示
+    /// 表示後、shell_txにShellMsg::Continueを送信してシェルを再開させ、trueを返す
+    fn run_jobs(&mut self, shell_tx: &SyncSender<ShellMsg>) -> bool {
+        todo!();
+    }
+
+    /// cdコマンドを実行
+    fn run_cd(&mut self, args: &[&str], shell_tx: &SyncSender<ShellMsg>) -> bool {
+        todo!();
+    }
+
+    /// fgコマンドを実行
+    fn run_fg(&mut self, args: &[&str], shell_tx: &SyncSender<ShellMsg>) -> bool {
+        self.exit_val = 1; // とりあえず失敗に設定
+
+        // 引数をチェック
+        if args.len() < 2 {
+            eprintln!("usage: fg 数字");
+            shell_tx.send(ShellMsg::Continue(self.exit_val)).unwrap(); // シェルを再開
+            return true;
+        }
+
+        // ジョブIDを取得
+        if let Ok(n) = args[1].parse::<usize>() {
+            if let Some((pgid, cmd)) = self.jobs.get(&n) {
+                eprintln!("[{n}] 再開\t{cmd}");
+
+                // フォアグラウンドプロセスに設定
+                self.fg = Some(*pgid);
+                tcsetpgrp(libc::STDIN_FILENO, *pgid).unwrap();
+
+                // ジョブの実行を再開
+                killpg(*pgid, Signal::SIGCONT).unwrap();
+                return true;
+            }
+        }
+
+        // 失敗
+        eprintln!("{}というジョブは見つかりませんでした", args[1]);
+        shell_tx.send(ShellMsg::Continue(self.exit_val)).unwrap(); // シェルを再開
+        true
+    }
+}
+
+fn parse_cmd(line: &str) -> CmdResult {
+    todo!();
 }
