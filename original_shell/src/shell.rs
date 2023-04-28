@@ -1,47 +1,13 @@
 use crate::helper::DynError;
-use nix::{
-    libc,
-    sys::{
-        signal::{killpg, signal, SigHandler, Signal},
-        wait::{waitpid, WaitPidFlag, WaitStatus},
-    },
-    unistd::{self, dup2, execvp, fork, pipe, setpgid, tcgetpgrp, tcsetpgrp, ForkResult, Pid},
-};
+use crate::msgs::{ShellMsg, WorkerMsg};
+use crate::signal_handler::spawn_sig_handler;
+use crate::worker::Worker;
+use nix::sys::signal::{signal, SigHandler, Signal};
 use rustyline::{error::ReadlineError, Editor};
-use signal_hook::{consts::*, iterator::Signals};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    ffi::CString,
-    mem::replace,
-    path::PathBuf,
     process::exit,
-    sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender},
-    thread,
+    sync::mpsc::{channel, sync_channel},
 };
-
-// workerスレッドが受信するメッセージ
-enum WorkerMsg {
-    Signal(i32),
-    Cmd(String),
-}
-
-// mainスレッドが受信するメッセージ
-enum ShellMsg {
-    Continue(i32), // 読み込みを再開。i32は終了コード
-    Quit(i32),     // シェルを終了。i32はシェルの終了コード
-}
-
-fn spawn_sig_handler(tx: Sender<WorkerMsg>) -> Result<(), DynError> {
-    let mut signals = Signals::new(&[SIGCHLD, SIGINT, SIGTSTP])?;
-    thread::spawn(move || {
-        for sig in signals.forever() {
-            // シグナルを受信し、workerスレッドに送信
-            tx.send(WorkerMsg::Signal(sig)).unwrap();
-        }
-    });
-
-    Ok(())
-}
 
 #[derive(Debug)]
 pub struct Shell {
@@ -68,7 +34,7 @@ impl Shell {
         let (worker_tx, worker_rx) = channel();
         let (shell_tx, shell_rx) = sync_channel(0);
         spawn_sig_handler(worker_tx.clone())?;
-        Worker::new().spawn(worker_rx, schell_tx);
+        Worker::new().spawn(worker_rx, shell_tx);
 
         let exit_val;
         let mut prev = 0; // 直前の終了コード
@@ -125,18 +91,5 @@ impl Shell {
             eprintln!("Atsush: ヒストリファイルの書き込みに失敗: {e}");
         }
         exit(exit_val);
-    }
-}
-
-/// システムコール呼び出しのラッパ。EINTRならリトライ
-fn syscall<F, T>(f: F) -> Result<T, nix::Error>
-where
-    F: Fn() -> Result<T, nix::Error>,
-{
-    loop {
-        match f() {
-            Err(nix::Error::EINTR) => (),
-            result => return result,
-        }
     }
 }
