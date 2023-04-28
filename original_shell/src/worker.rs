@@ -212,12 +212,12 @@ impl Worker {
         let job_id = if let Some(id) = self.get_new_job_id() {
             id
         } else {
-            eprintln!("ZeroSh: 管理可能なジョブの最大値に到達");
+            eprintln!("Atsush: 管理可能なジョブの最大値に到達");
             return false;
         };
 
         if cmd.len() > 2 {
-            eprintln!("ZeroSh: 三つ以上のコマンドによるパイプはサポートしていません");
+            eprintln!("Atsush: 三つ以上のコマンドによるパイプはサポートしていません");
             return false;
         }
 
@@ -249,7 +249,7 @@ impl Worker {
                 pgid = child;
             }
             Err(e) => {
-                eprintln!("ZeroSh: プロセス生成エラー: {e}");
+                eprintln!("Atsush: プロセス生成エラー: {e}");
                 return false;
             }
         }
@@ -269,7 +269,7 @@ impl Worker {
                     pids.insert(child, info);
                 }
                 Err(e) => {
-                    eprintln!("ZeroSh: プロセス生成エラー: {e}");
+                    eprintln!("Atsush: プロセス生成エラー: {e}");
                     return false;
                 }
             }
@@ -302,7 +302,7 @@ impl Worker {
                 Ok(WaitStatus::Signaled(pid, sig, core)) => {
                     // プロセスがシグナルにより終了
                     eprintln!(
-                        "\nZeroSh: 子プロセスがシグナルにより終了{}: pid = {pid}, signal = {sig}",
+                        "\nAtsush: 子プロセスがシグナルにより終了{}: pid = {pid}, signal = {sig}",
                         if core { "（コアダンプ）" } else { "" }
                     );
                     self.exit_val = sig as i32 + 128; // 終了コードを保存
@@ -315,7 +315,7 @@ impl Worker {
                 Ok(WaitStatus::StillAlive) => return, // waitすべき子プロセスはいない
                 Err(nix::Error::ECHILD) => return,    // 子プロセスはいない
                 Err(e) => {
-                    eprintln!("\nZeroSh: waitが失敗: {e}");
+                    eprintln!("\nAtsush: waitが失敗: {e}");
                     exit(1);
                 }
                 #[cfg(any(target_os = "linux", target_os = "android"))]

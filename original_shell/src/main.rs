@@ -3,7 +3,7 @@ mod shell;
 
 use helper::DynError;
 
-const HISTORY_FILE: &str = ".zerosh_history";
+const HISTORY_FILE: &str = ".Atsush_history";
 
 fn main() -> Result<(), DynError> {
     let mut logfile = HISTORY_FILE;
