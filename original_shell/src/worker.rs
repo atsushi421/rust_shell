@@ -3,20 +3,18 @@ use crate::msgs::{ShellMsg, WorkerMsg};
 use nix::{
     libc,
     sys::{
-        signal::{killpg, signal, SigHandler, Signal},
+        signal::{killpg, Signal},
         wait::{waitpid, WaitPidFlag, WaitStatus},
     },
     unistd::{self, dup2, execvp, fork, pipe, setpgid, tcgetpgrp, tcsetpgrp, ForkResult, Pid},
 };
-use rustyline::{error::ReadlineError, Editor};
-use signal_hook::{consts::*, iterator::Signals};
+
+use signal_hook::consts::*;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ffi::CString,
     mem::replace,
-    path::PathBuf,
-    process::exit,
-    sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender},
+    sync::mpsc::{Receiver, SyncSender},
     thread,
 };
 
