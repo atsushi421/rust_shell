@@ -167,7 +167,11 @@ impl Worker {
     /// worker::jobsを表示
     /// 表示後、shell_txにShellMsg::Continueを送信してシェルを再開させ、trueを返す
     fn run_jobs(&mut self, shell_tx: &SyncSender<ShellMsg>) -> bool {
-        todo!();
+        for (jid, (pid, cmd)) in &self.jobs {
+            println!("JobID: {jid} | PID: {pid}, Cmd: {cmd}");
+        }
+        shell_tx.send(ShellMsg::Continue(self.exit_val)).unwrap(); // シェルを再開
+        true
     }
 
     /// cdコマンドを実行
