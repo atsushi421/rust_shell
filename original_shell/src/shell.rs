@@ -69,8 +69,6 @@ pub struct Worker {
     shell_pgid: Pid,                     // シェルのプロセスグループID
 }
 
-type CmdResult<'a> = Result<Vec<(&'a str, Vec<&'a str>)>, DynError>;
-
 impl Worker {
     pub fn new() -> Self {
         Worker {
@@ -523,10 +521,6 @@ fn fork_exec(
     }
 }
 
-fn parse_cmd(line: &str) -> CmdResult {
-    todo!();
-}
-
 pub fn spawn_sig_handler(tx: Sender<WorkerMsg>) -> Result<(), DynError> {
     let mut signals = Signals::new(&[SIGCHLD, SIGINT, SIGTSTP])?;
     thread::spawn(move || {
@@ -633,5 +627,42 @@ impl Shell {
             eprintln!("Atsush: ヒストリファイルの書き込みに失敗: {e}");
         }
         exit(exit_val);
+    }
+}
+
+type CmdResult<'a> = Result<Vec<(&'a str, Vec<&'a str>)>, DynError>;
+
+fn parse_cmd(line: &str) -> CmdResult {
+    let mut cmd_result: Vec<(&str, Vec<&str>)> = vec![];
+    for splitted in line.split('|') {
+        let cmd_and_args: Vec<&str> = splitted.trim().split(' ').collect();
+        if cmd_and_args == [""] {
+            return Err("Atsush: パイプの先にコマンドがありません".into());
+        }
+        match cmd_and_args.len() {
+            1 => cmd_result.push((cmd_and_args[0], vec![])),
+            _ => cmd_result.push((cmd_and_args[0], Vec::from(&cmd_and_args[1..]))),
+        }
+    }
+
+    Ok(cmd_result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_cmd_normal() {
+        let line = "echo hello | less";
+        let result = parse_cmd(line);
+        assert_eq!(result.unwrap(), [("echo", vec!["hello"]), ("less", vec![])]);
+    }
+
+    #[test]
+    fn test_parse_cmd_no_cmd() {
+        let line = "echo hello | | less";
+        let result = parse_cmd(line);
+        assert!(result.is_err());
     }
 }
