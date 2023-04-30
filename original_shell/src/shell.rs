@@ -170,13 +170,35 @@ impl Worker {
         for (jid, (pid, cmd)) in &self.jobs {
             println!("JobID: {jid} | PID: {pid}, Cmd: {cmd}");
         }
+
+        self.exit_val = 0; // 成功
         shell_tx.send(ShellMsg::Continue(self.exit_val)).unwrap(); // シェルを再開
         true
     }
 
     /// cdコマンドを実行
     fn run_cd(&mut self, args: &[&str], shell_tx: &SyncSender<ShellMsg>) -> bool {
-        todo!();
+        // let cur_dir = std::env::current_dir().unwrap();
+        match args.len() {
+            0 => {
+                // 引数がない場合はホームディレクトリに移動
+                let home_dir = dirs::home_dir().unwrap();
+                std::env::set_current_dir(home_dir)
+                    .expect("カレントディレクトリの変更に失敗しました");
+            }
+            1 => {
+                // 引数がある場合はそのディレクトリに移動
+                std::env::set_current_dir(args[0])
+                    .expect("カレントディレクトリの変更に失敗しました");
+            }
+            _ => {
+                self.exit_val = 1; // 失敗
+                eprintln!("usage: cd [path to dir]");
+            }
+        }
+
+        shell_tx.send(ShellMsg::Continue(self.exit_val)).unwrap(); // シェルを再開
+        true
     }
 
     /// fgコマンドを実行
